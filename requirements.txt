@@ -1,0 +1,6 @@
+# No external dependencies required
+# The converter uses only Python standard library modules:
+# - zipfile: for reading XMind files (ZIP archives)
+# - json: for parsing XMind content.json (newer format)
+# - xml.etree.ElementTree: for parsing/generating XML
+# - pathlib: for file operations

@@ -1,0 +1,24 @@
+# Default ignored files
+/shelf/
+/.idea/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+.venv/*
+.idea/*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Proprietary XMind and Draw.io files - DO NOT COMMIT
+xmindInput/*.xmind
+drawioOutput/*.drawio
+xmindContent/*.png
+
+# Allow test data only
+!testData/*.xmind
+!testOutput/*.drawio
