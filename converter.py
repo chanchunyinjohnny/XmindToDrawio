@@ -2,6 +2,9 @@
 """
 XMind to Draw.io Converter
 
+Copyright (c) 2026 Johnny
+Licensed under the MIT License - see LICENSE file for details.
+
 Converts XMind mind map files to Draw.io format.
 Reads from ./xmindInput and outputs to ./drawioOutput
 

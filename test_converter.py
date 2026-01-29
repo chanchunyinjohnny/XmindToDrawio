@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Test cases for XMind to Draw.io converter.
+
+Copyright (c) 2026 Johnny
+Licensed under the MIT License - see LICENSE file for details.
+
 Validates fixes for issues encountered during development.
 """
 

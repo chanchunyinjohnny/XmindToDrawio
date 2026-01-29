@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Creates synthetic test XMind files for testing purposes.
+
+Copyright (c) 2026 Johnny
+Licensed under the MIT License - see LICENSE file for details.
+
 Contains NO proprietary content - only generic test data.
 """
 

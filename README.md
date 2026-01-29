@@ -190,7 +190,9 @@ Key components:
 
 ## License
 
-[Add your license here]
+MIT License - see [LICENSE](LICENSE) file for details.
+
+**TL;DR:** You can freely use, modify, and distribute this code, but you must give credit to the original author.
 
 ## Acknowledgments
 
