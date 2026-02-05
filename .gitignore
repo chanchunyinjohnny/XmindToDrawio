@@ -15,10 +15,13 @@ __pycache__/
 *$py.class
 
 # Proprietary XMind and Draw.io files - DO NOT COMMIT
-xmindInput/*.xmind
-drawioOutput/*.drawio
-xmindContent/*.png
+xmindInput/
+drawioOutput/
+xmindContent/
 
 # Allow test data only
 !testData/*.xmind
 !testOutput/*.drawio
+
+# AI
+.claude/

@@ -17,8 +17,9 @@ The converter automatically creates input/output directories if they don't exist
 import zipfile
 import xml.etree.ElementTree as ET
 import json
+import re
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Optional, Any
 
 
 class XMindParser:
@@ -31,11 +32,17 @@ class XMindParser:
             'fo': 'http://www.w3.org/1999/XSL/Format'
         }
         self.is_json_format = False
+        self.resources: Dict[str, bytes] = {}  # Store extracted image resources
 
     def parse(self) -> Optional[Any]:
         """Extract and parse content from XMind file (JSON or XML format)."""
         try:
             with zipfile.ZipFile(self.xmind_path, 'r') as zip_file:
+                # Extract all resources (images)
+                for name in zip_file.namelist():
+                    if name.startswith('resources/') and not name.endswith('/'):
+                        self.resources[name] = zip_file.read(name)
+
                 # Try content.json first (newer format)
                 if 'content.json' in zip_file.namelist():
                     self.is_json_format = True
@@ -198,6 +205,8 @@ class DrawioGenerator:
             # Convert callout
             callout_id = self._convert_json_callout(callout, parent, current_id,
                                                     callout_x, callout_y)
+
+        # Note: Embedded images are extracted to a separate folder, not embedded in Draw.io
 
         return current_id
 
@@ -394,6 +403,120 @@ class XMindToDrawioConverter:
         for xmind_file in xmind_files:
             self.convert_file(xmind_file)
 
+    def _sanitize_filename(self, name: str, max_length: int = 50) -> str:
+        """Sanitize a string to be safe for use as a filename.
+
+        Args:
+            name: The original name
+            max_length: Maximum length for the filename (default 50)
+
+        Returns:
+            A filesystem-safe version of the name
+        """
+        # Remove or replace characters that are invalid in filenames
+        # Keep Chinese characters, alphanumeric, spaces, hyphens, underscores
+        sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+        # Replace multiple spaces/underscores with single underscore
+        sanitized = re.sub(r'[\s_]+', '_', sanitized)
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+        # Truncate if too long
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length].rstrip('_')
+        return sanitized or 'image'
+
+    def _build_image_name_mapping(self, root_topic: Any, is_json: bool) -> Dict[str, str]:
+        """Build a mapping from resource paths to meaningful names based on topic titles.
+
+        Args:
+            root_topic: The root topic of the XMind content
+            is_json: Whether the content is in JSON format
+
+        Returns:
+            Dict mapping resource paths (e.g., 'resources/abc.png') to names
+        """
+        mapping = {}
+        untitled_count = 0
+
+        def traverse_json_topic(topic: Dict):
+            nonlocal untitled_count
+
+            # Check if this topic has an image
+            if 'image' in topic:
+                image_src = topic['image'].get('src', '')
+                if image_src:
+                    # Remove 'xap:' prefix
+                    resource_path = image_src.replace('xap:', '')
+
+                    # Get topic title for the image name
+                    title = topic.get('title', '').strip()
+                    if not title or title == 'Untitled':
+                        untitled_count += 1
+                        title = f'image_{untitled_count}'
+
+                    mapping[resource_path] = self._sanitize_filename(title)
+
+            # Traverse children
+            children = topic.get('children', {})
+            for child in children.get('attached', []):
+                traverse_json_topic(child)
+            for child in children.get('callout', []):
+                traverse_json_topic(child)
+
+        if is_json:
+            traverse_json_topic(root_topic)
+
+        return mapping
+
+    def _extract_images(self, parser: XMindParser, root_topic: Any, xmind_name: str) -> Optional[Path]:
+        """Extract embedded images from XMind to a folder.
+
+        Args:
+            parser: The XMindParser with loaded resources
+            root_topic: The root topic for building name mapping
+            xmind_name: Name of the XMind file (without extension)
+
+        Returns:
+            Path to the images folder, or None if no images
+        """
+        if not parser.resources:
+            return None
+
+        # Create images folder named after the XMind file
+        images_dir = self.output_dir / f"{xmind_name}_images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build mapping from resource paths to meaningful names
+        name_mapping = self._build_image_name_mapping(root_topic, parser.is_json_format)
+
+        # Track used names to handle duplicates
+        used_names: Dict[str, int] = {}
+
+        extracted_count = 0
+        for resource_path, image_data in parser.resources.items():
+            # Get the extension from original filename
+            original_ext = Path(resource_path).suffix or '.png'
+
+            # Get meaningful name from mapping, or use fallback
+            base_name = name_mapping.get(resource_path, f'image_{extracted_count + 1}')
+
+            # Handle duplicate names by adding a number suffix
+            if base_name in used_names:
+                used_names[base_name] += 1
+                filename = f"{base_name}_{used_names[base_name]}{original_ext}"
+            else:
+                used_names[base_name] = 1
+                filename = f"{base_name}{original_ext}"
+
+            # Save the image
+            output_path = images_dir / filename
+            with open(output_path, 'wb') as f:
+                f.write(image_data)
+            extracted_count += 1
+
+        print(f"  Extracted {extracted_count} image(s) to: {images_dir}")
+        return images_dir
+
     def convert_file(self, xmind_path: Path):
         """Convert a single XMind file to Draw.io format."""
         print(f"\nConverting: {xmind_path.name}")
@@ -412,7 +535,12 @@ class XMindToDrawioConverter:
             print(f"  No root topic found in {xmind_path.name}")
             return
 
-        # Generate Draw.io structure
+        # Extract embedded images to a folder (needs root_topic for name mapping)
+        if parser.resources:
+            print(f"  Found {len(parser.resources)} embedded image(s)")
+            self._extract_images(parser, root_topic, xmind_path.stem)
+
+        # Generate Draw.io structure (don't pass parser - images are extracted separately)
         generator = DrawioGenerator()
         drawio_xml = generator.create_drawio_xml(root_topic, parser.is_json_format, parser.namespaces)
 
